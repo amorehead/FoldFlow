@@ -84,7 +84,7 @@ class SO3ConditionalFlowMatcher:
         output = -dist_x0_x1[:, None, None] * dist_grad_wrt_xt / denom_term[:, None, None]
         return output #* 2 * t[:, None, None]
         
-    def sample_location_and_conditional_flow(self, x0, x1, time_der=True):
+    def sample_location_and_conditional_flow(self, x0, x1, time_der=True, t=None):
         """
         Compute the sample xt along the geodesic from x0 to x1 (see Eq.2 [1])
         and the conditional vector field ut(xt|z). The coupling q(x0,x1) is
@@ -98,6 +98,8 @@ class SO3ConditionalFlowMatcher:
             represents the target minibatch
         time_der : bool
             ut computed through time derivative
+        t : Optional[Tensor], shape (bs)
+            optional time Tensor
 
 
         Returns
@@ -112,7 +114,8 @@ class SO3ConditionalFlowMatcher:
         [1] SE(3)-Stochastic Flow Matching for Protein Backbone Generation, Bose et al.
         [2] Riemannian Flow Matching on General Geometries, Chen et al.
         """
-        t = torch.rand(x0.shape[0]).type_as(x0).to(x0.device)
+        if t is None:
+            t = torch.rand(x0.shape[0]).type_as(x0).to(x0.device)
         t.requires_grad = True
         xt = self.sample_xt(x0, x1, t, if_matrix_format=True)
         if time_der:
@@ -139,7 +142,7 @@ class SO3OptimalTransportConditionalFlowMatcher(SO3ConditionalFlowMatcher):
         self.sigma = sigma
         self.ot_sampler = SO3OTPlanSampler(method="exact")
 
-    def sample_location_and_conditional_flow(self, x0, x1, time_der=True):
+    def sample_location_and_conditional_flow(self, x0, x1, time_der=True, t=None):
         """
         Compute the sample xt along the geodesic from x0 to x1 (see Eq.2 [1])
         and the conditional vector field ut(xt|z). The coupling q(x0,x1) is
@@ -153,6 +156,8 @@ class SO3OptimalTransportConditionalFlowMatcher(SO3ConditionalFlowMatcher):
             represents the target minibatch
         time_der : bool
             ut computed through time derivative
+        t : Optional[Tensor], shape (bs)
+            optional time Tensor
 
 
         Returns
@@ -170,7 +175,7 @@ class SO3OptimalTransportConditionalFlowMatcher(SO3ConditionalFlowMatcher):
         [4] Learning with minibatch Wasserstein: asymptotic and gradient properties, Fatras et al.
         """
         x0, x1 = self.ot_sampler.sample_plan(x0, x1)
-        return super().sample_location_and_conditional_flow(x0.double(), x1.double(), time_der=time_der)
+        return super().sample_location_and_conditional_flow(x0.double(), x1.double(), time_der=time_der, t=t)
 
 
 class SO3SFM(SO3ConditionalFlowMatcher):
@@ -221,7 +226,7 @@ class SO3SFM(SO3ConditionalFlowMatcher):
         ut = zt @ log(x1_minus_zt)/(1-t[:, None, None])
         return ut
 
-    def sample_location_and_conditional_flow(self, x0, x1):
+    def sample_location_and_conditional_flow(self, x0, x1, t=None):
         """
         Compute the sample xt along the geodesic from x0 to x1 (see Eq.9 [1])
         and the conditional vector field ut(xt|z).
@@ -232,8 +237,8 @@ class SO3SFM(SO3ConditionalFlowMatcher):
             represents the source minibatch
         x1 : Tensor, shape (bs, *dim)
             represents the target minibatch
-        time_der : bool
-            ut computed through time derivative
+        t : Optional[Tensor], shape (bs)
+            optional time Tensor
 
         Returns
         -------
@@ -246,7 +251,9 @@ class SO3SFM(SO3ConditionalFlowMatcher):
         ----------
         [1] SE(3)-Stochastic Flow Matching for Protein Backbone Generation, Bose et al.
         """
-        t = torch.clamp(torch.rand(x0.shape[0]).type_as(x0).to(x0.device), min=0.01, max=0.99)
+        if t is None:
+            t = torch.rand(x0.shape[0]).type_as(x0).to(x0.device)
+        t = torch.clamp(t, min=0.01, max=0.99)
         x0, x1 = self.ot_sampler.sample_plan(x0, x1)
         zt = self.sample_zt(x0, x1, t)
         ut = self.compute_conditional_flow(zt, x1, t)

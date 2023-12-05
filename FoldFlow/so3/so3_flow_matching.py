@@ -119,7 +119,7 @@ class SO3ConditionalFlowMatcher:
         t.requires_grad = True
         xt = self.sample_xt(x0, x1, t, if_matrix_format=True)
         if time_der:
-            delta_r = torch.transpose(x0, dim0=-2, dim1=-1) @ xt.double()
+            delta_r = torch.transpose(x0, dim0=-2, dim1=-1) @ xt
             ut = xt @ log(delta_r)/t[:, None, None]
             # Above is faster than taking the time derivative like in [2]
             # ut = self.compute_conditional_flow_simple(t, xt)
@@ -175,7 +175,7 @@ class SO3OptimalTransportConditionalFlowMatcher(SO3ConditionalFlowMatcher):
         [4] Learning with minibatch Wasserstein: asymptotic and gradient properties, Fatras et al.
         """
         x0, x1 = self.ot_sampler.sample_plan(x0, x1)
-        return super().sample_location_and_conditional_flow(x0.double(), x1.double(), time_der=time_der, t=t)
+        return super().sample_location_and_conditional_flow(x0, x1, time_der=time_der, t=t)
 
 
 class SO3SFM(SO3ConditionalFlowMatcher):
@@ -200,7 +200,7 @@ class SO3SFM(SO3ConditionalFlowMatcher):
         """
         Function which compute the IGSO3 mean (see Eq (9) in [1]).
         """
-        return super().sample_xt(x0.double(), x1.double(), t, if_matrix_format=True)
+        return super().sample_xt(x0, x1, t, if_matrix_format=True)
     
     def compute_epsilon_t(self, t):
         """
@@ -222,7 +222,7 @@ class SO3SFM(SO3ConditionalFlowMatcher):
         """
         Function which computes the vector field for a sample zt on SO3.
         """
-        x1_minus_zt = torch.transpose(zt, dim0=-2, dim1=-1) @ x1.double()
+        x1_minus_zt = torch.transpose(zt, dim0=-2, dim1=-1) @ x1
         ut = zt @ log(x1_minus_zt)/(1-t[:, None, None])
         return ut
 

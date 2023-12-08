@@ -84,7 +84,7 @@ class SO3ConditionalFlowMatcher:
         output = -dist_x0_x1[:, None, None] * dist_grad_wrt_xt / denom_term[:, None, None]
         return output #* 2 * t[:, None, None]
         
-    def sample_location_and_conditional_flow(self, x0, x1, time_der=True, t=None):
+    def sample_location_and_conditional_flow(self, x0, x1, time_der=True, compute_ut=True, t=None):
         """
         Compute the sample xt along the geodesic from x0 to x1 (see Eq.2 [1])
         and the conditional vector field ut(xt|z). The coupling q(x0,x1) is
@@ -98,6 +98,8 @@ class SO3ConditionalFlowMatcher:
             represents the target minibatch
         time_der : bool
             ut computed through time derivative
+        compute_ut : bool
+            compute conditional vector field ut
         t : Optional[Tensor], shape (bs)
             optional time Tensor
 
@@ -107,7 +109,7 @@ class SO3ConditionalFlowMatcher:
         t : FloatTensor, shape (bs)
         xt : Tensor, shape (bs, *dim)
             represents the samples drawn along the geodesic
-        ut : conditional vector field ut(xt|z)
+        ut : optional conditional vector field ut(xt|z)
 
         References
         ----------
@@ -118,12 +120,13 @@ class SO3ConditionalFlowMatcher:
             t = torch.rand(x0.shape[0]).type_as(x0).to(x0.device)
         t.requires_grad = True
         xt = self.sample_xt(x0, x1, t, if_matrix_format=True)
-        if time_der:
+        ut = None
+        if compute_ut and time_der:
             delta_r = torch.transpose(x0, dim0=-2, dim1=-1) @ xt
             ut = xt @ log(delta_r)/t[:, None, None]
             # Above is faster than taking the time derivative like in [2]
             # ut = self.compute_conditional_flow_simple(t, xt)
-        else:
+        elif compute_ut:
             # Compute general vector field like in [2] 
             ut = self.compute_conditional_flow(xt, x0, x1, t)
         return t, xt, ut
@@ -142,7 +145,7 @@ class SO3OptimalTransportConditionalFlowMatcher(SO3ConditionalFlowMatcher):
         self.sigma = sigma
         self.ot_sampler = SO3OTPlanSampler(method="exact")
 
-    def sample_location_and_conditional_flow(self, x0, x1, time_der=True, t=None):
+    def sample_location_and_conditional_flow(self, x0, x1, time_der=True, compute_ut=True, t=None):
         """
         Compute the sample xt along the geodesic from x0 to x1 (see Eq.2 [1])
         and the conditional vector field ut(xt|z). The coupling q(x0,x1) is
@@ -156,6 +159,8 @@ class SO3OptimalTransportConditionalFlowMatcher(SO3ConditionalFlowMatcher):
             represents the target minibatch
         time_der : bool
             ut computed through time derivative
+        compute_ut : bool
+            compute conditional vector field ut
         t : Optional[Tensor], shape (bs)
             optional time Tensor
 
@@ -165,7 +170,7 @@ class SO3OptimalTransportConditionalFlowMatcher(SO3ConditionalFlowMatcher):
         t : FloatTensor, shape (bs)
         xt : Tensor, shape (bs, *dim)
             represents the samples drawn along the geodesic
-        ut : conditional vector field ut(xt|z)
+        ut : optional conditional vector field ut(xt|z)
 
         References
         ----------
@@ -175,7 +180,7 @@ class SO3OptimalTransportConditionalFlowMatcher(SO3ConditionalFlowMatcher):
         [4] Learning with minibatch Wasserstein: asymptotic and gradient properties, Fatras et al.
         """
         x0, x1 = self.ot_sampler.sample_plan(x0, x1)
-        return super().sample_location_and_conditional_flow(x0, x1, time_der=time_der, t=t)
+        return super().sample_location_and_conditional_flow(x0, x1, time_der=time_der, compute_ut=compute_ut, t=t)
 
 
 class SO3SFM(SO3ConditionalFlowMatcher):
@@ -226,7 +231,7 @@ class SO3SFM(SO3ConditionalFlowMatcher):
         ut = zt @ log(x1_minus_zt)/(1-t[:, None, None])
         return ut
 
-    def sample_location_and_conditional_flow(self, x0, x1, t=None):
+    def sample_location_and_conditional_flow(self, x0, x1, compute_ut=True, t=None):
         """
         Compute the sample xt along the geodesic from x0 to x1 (see Eq.9 [1])
         and the conditional vector field ut(xt|z).
@@ -237,6 +242,8 @@ class SO3SFM(SO3ConditionalFlowMatcher):
             represents the source minibatch
         x1 : Tensor, shape (bs, *dim)
             represents the target minibatch
+        compute_ut : bool
+            compute conditional vector field ut
         t : Optional[Tensor], shape (bs)
             optional time Tensor
 
@@ -245,7 +252,7 @@ class SO3SFM(SO3ConditionalFlowMatcher):
         t : FloatTensor, shape (bs)
         xt : Tensor, shape (bs, *dim)
             represents the samples drawn along the geodesic
-        ut : conditional vector field ut(xt|z)
+        ut : optional conditional vector field ut(xt|z)
 
         References
         ----------
@@ -256,5 +263,5 @@ class SO3SFM(SO3ConditionalFlowMatcher):
         t = torch.clamp(t, min=0.01, max=0.99)
         x0, x1 = self.ot_sampler.sample_plan(x0, x1)
         zt = self.sample_zt(x0, x1, t)
-        ut = self.compute_conditional_flow(zt, x1, t)
+        ut = self.compute_conditional_flow(zt, x1, t) if compute_ut else None
         return t, zt, ut

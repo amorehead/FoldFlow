@@ -231,7 +231,7 @@ class SO3SFM(SO3ConditionalFlowMatcher):
         ut = zt @ log(x1_minus_zt)/(1-t[:, None, None])
         return ut
 
-    def sample_location_and_conditional_flow(self, x0, x1, compute_ut=True, t=None):
+    def sample_location_and_conditional_flow(self, x0, x1, compute_ut=True, t=None, **kwargs):
         """
         Compute the sample xt along the geodesic from x0 to x1 (see Eq.9 [1])
         and the conditional vector field ut(xt|z).
